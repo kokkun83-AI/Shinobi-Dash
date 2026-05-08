@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Shinobi Dash Item Catalog</title>
+  <style>
+    @font-face {
+      font-family: "PixelMplus12";
+      src: url("fonts/pixelmplus/PixelMplus-20130602/PixelMplus12-Regular.ttf") format("truetype");
+      font-weight: 400;
+      font-style: normal;
+      font-display: swap;
+    }
+
+    :root {
+      --bg: #05070d;
+      --panel: #090d14;
+      --panel-2: #111823;
+      --line: #5a3b12;
+      --gold: #ffe06c;
+      --text: #ffeeb7;
+      --muted: #b9a77a;
+      --common: #ffffff;
+      --uncommon: #ffe06c;
+      --rare: #7fe7ff;
+      --epic: #ff8cff;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      color: var(--text);
+      background:
+        radial-gradient(circle at 72% 8%, rgba(255, 224, 108, 0.11), transparent 22rem),
+        linear-gradient(180deg, #05070d 0%, #08111b 48%, #03050a 100%);
+      font-family: "PixelMplus12", monospace;
+      line-height: 1.7;
+    }
+
+    main { width: min(1180px, calc(100% - 24px)); margin: 0 auto; padding: 28px 0 40px; }
+    header {
+      display: grid; gap: 14px; margin-bottom: 18px; padding: 18px;
+      border: 3px solid var(--line); background: rgba(9, 11, 16, 0.86);
+      box-shadow: 0 0 0 3px #03050a, 0 18px 30px rgba(0, 0, 0, 0.35);
+    }
+    h1 { margin: 0; color: #ffe06c; font-size: clamp(32px, 6vw, 56px); line-height: 1; text-shadow: 4px 4px 0 #4b0710; }
+    .summary, .toolbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+    .count-pill, .filter-button {
+      border: 2px solid #3a2a10; background: rgba(5, 7, 12, 0.86);
+      box-shadow: 0 0 0 2px #03050a; color: var(--text); padding: 5px 8px; font: inherit; font-size: 14px;
+    }
+    .count-pill[data-rarity="common"], .rarity-title[data-rarity="common"] { color: var(--common); }
+    .count-pill[data-rarity="uncommon"], .rarity-title[data-rarity="uncommon"] { color: var(--uncommon); }
+    .count-pill[data-rarity="rare"], .rarity-title[data-rarity="rare"] { color: var(--rare); }
+    .count-pill[data-rarity="epic"], .rarity-title[data-rarity="epic"] { color: var(--epic); }
+    .search {
+      min-width: min(100%, 320px); flex: 1 1 260px; border: 2px solid #4c3413;
+      background: #03050a; color: var(--text); padding: 8px 10px; font: inherit; outline: none;
+      box-shadow: inset 0 0 0 1px rgba(255, 224, 108, 0.12);
+    }
+    .filter-button { cursor: pointer; }
+    .filter-button.active { color: #050506; background: linear-gradient(180deg, #ffe67d, #d99918); border-color: #ffe06c; }
+    .rarity-section {
+      margin-top: 18px; padding: 14px; border: 3px solid var(--line);
+      background: rgba(4, 7, 12, 0.82); box-shadow: 0 0 0 3px #03050a;
+    }
+    .rarity-header { display: flex; justify-content: space-between; gap: 12px; align-items: baseline; margin-bottom: 12px; }
+    .rarity-title { margin: 0; font-size: clamp(22px, 4vw, 34px); line-height: 1; text-shadow: 3px 3px 0 #050506; }
+    .rarity-total { color: var(--muted); font-size: 14px; }
+    .item-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px; }
+    .item-card {
+      display: grid; grid-template-columns: 64px 1fr; gap: 10px; min-height: 128px; padding: 10px;
+      border: 2px solid #3f2b11; background: linear-gradient(180deg, rgba(12, 17, 25, 0.94), rgba(5, 8, 13, 0.96));
+      box-shadow: inset 0 0 0 1px rgba(255, 224, 108, 0.08);
+    }
+    .item-card[data-rarity="common"] { border-color: #555b66; }
+    .item-card[data-rarity="uncommon"] { border-color: #9b741d; }
+    .item-card[data-rarity="rare"] { border-color: #237e9b; }
+    .item-card[data-rarity="epic"] { border-color: #8c3da2; }
+    .icon-box { width: 64px; height: 64px; display: grid; place-items: center; border: 2px solid #4c3413; background: #02050a; box-shadow: 0 0 0 2px #03050a; }
+    canvas { width: 56px; height: 56px; image-rendering: pixelated; display: block; }
+    h3 { margin: 0 0 4px; color: #ffeeb7; font-size: 17px; line-height: 1.2; }
+    .item-id { margin: 0 0 6px; color: #8f9aaa; font-size: 11px; line-height: 1.1; overflow-wrap: anywhere; }
+    .flavor { margin: 0; color: #d8c991; font-size: 13px; line-height: 1.55; }
+    .hidden { display: none; }
+    @media (max-width: 560px) {
+      main { width: min(100% - 16px, 1180px); padding-top: 14px; }
+      header, .rarity-section { padding: 10px; }
+      .item-grid { grid-template-columns: 1fr; }
+      .item-card { grid-template-columns: 56px 1fr; }
+      .icon-box { width: 56px; height: 56px; }
+      canvas { width: 50px; height: 50px; }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <h1>ITEM CATALOG</h1>
+      <div class="summary">
+        <span class="count-pill">TOTAL 100</span>
+        <span class="count-pill" data-rarity="common">コモン 50 / 70%</span>
+        <span class="count-pill" data-rarity="uncommon">アンコモン 30 / 27%</span>
+        <span class="count-pill" data-rarity="rare">レア 15 / 2.5%</span>
+        <span class="count-pill" data-rarity="epic">エピック 5 / 0.5%</span>
+      </div>
+      <div class="toolbar" aria-label="catalog controls">
+        <input id="search" class="search" type="search" placeholder="SEARCH" autocomplete="off">
+        <button class="filter-button active" type="button" data-filter="all">ALL</button>
+        <button class="filter-button" type="button" data-filter="common">コモン</button>
+        <button class="filter-button" type="button" data-filter="uncommon">アンコモン</button>
+        <button class="filter-button" type="button" data-filter="rare">レア</button>
+        <button class="filter-button" type="button" data-filter="epic">エピック</button>
+      </div>
+    </header>
+    <div id="catalog"></div>
+  </main>
+  <script src="items.js"></script>
+  <script>
+    const catalogData = window.ShinobiDashItems.createCatalogData();
+
+    function paintPixelSprite(target, rows, palette, x, y, scale) {
+      target.imageSmoothingEnabled = false;
+      for (let row = 0; row < rows.length; row += 1) {
+        const line = rows[row];
+        for (let col = 0; col < line.length; col += 1) {
+          const key = line[col];
+          if (key === ".") continue;
+          target.fillStyle = palette[key] || palette.k || "#050506";
+          target.fillRect(Math.round(x + col * scale), Math.round(y + row * scale), scale, scale);
+        }
+      }
+    }
+    function chanceText(chance) {
+      const percent = chance * 100;
+      return Number.isInteger(percent) ? percent + "%" : percent.toFixed(1) + "%";
+    }
+    function renderIcon(canvas, item) {
+      const target = canvas.getContext("2d");
+      const size = canvas.width;
+      target.clearRect(0, 0, size, size);
+      const cols = item.icon[0].length;
+      const rows = item.icon.length;
+      const scale = Math.max(1, Math.floor(size / Math.max(cols, rows)));
+      const spriteW = cols * scale;
+      const spriteH = rows * scale;
+      paintPixelSprite(target, item.icon, item.palette, Math.round((size - spriteW) / 2), Math.round((size - spriteH) / 2), scale);
+    }
+    const catalog = document.getElementById("catalog");
+    const search = document.getElementById("search");
+    const buttons = Array.from(document.querySelectorAll(".filter-button"));
+    let activeFilter = "all";
+    function buildCatalog() {
+      catalog.textContent = "";
+      for (const rarity of catalogData.rarityOrder) {
+        const meta = catalogData.rarityMeta[rarity];
+        const group = catalogData.items.filter((item) => item.rarity === rarity);
+        const section = document.createElement("section");
+        section.className = "rarity-section";
+        section.dataset.rarity = rarity;
+        const header = document.createElement("div");
+        header.className = "rarity-header";
+        const title = document.createElement("h2");
+        title.className = "rarity-title";
+        title.dataset.rarity = rarity;
+        title.textContent = meta.label + " (" + chanceText(meta.chance) + ")";
+        const total = document.createElement("div");
+        total.className = "rarity-total";
+        total.textContent = group.length + " ITEMS";
+        header.append(title, total);
+        const grid = document.createElement("div");
+        grid.className = "item-grid";
+        for (const item of group) {
+          const card = document.createElement("article");
+          card.className = "item-card";
+          card.dataset.rarity = item.rarity;
+          card.dataset.search = (item.name + " " + item.id + " " + item.flavor + " " + meta.label).toLowerCase();
+          const iconBox = document.createElement("div");
+          iconBox.className = "icon-box";
+          const canvas = document.createElement("canvas");
+          canvas.width = 64;
+          canvas.height = 64;
+          renderIcon(canvas, item);
+          iconBox.append(canvas);
+          const body = document.createElement("div");
+          const name = document.createElement("h3");
+          name.textContent = item.name;
+          const id = document.createElement("p");
+          id.className = "item-id";
+          id.textContent = item.id;
+          const flavor = document.createElement("p");
+          flavor.className = "flavor";
+          flavor.textContent = item.flavor;
+          body.append(name, id, flavor);
+          card.append(iconBox, body);
+          grid.append(card);
+        }
+        section.append(header, grid);
+        catalog.append(section);
+      }
+    }
+    function applyFilters() {
+      const term = search.value.trim().toLowerCase();
+      for (const section of catalog.querySelectorAll(".rarity-section")) {
+        const rarityMatch = activeFilter === "all" || section.dataset.rarity === activeFilter;
+        let visibleCount = 0;
+        for (const card of section.querySelectorAll(".item-card")) {
+          const visible = rarityMatch && (!term || card.dataset.search.includes(term));
+          card.classList.toggle("hidden", !visible);
+          if (visible) visibleCount += 1;
+        }
+        section.classList.toggle("hidden", visibleCount === 0);
+      }
+    }
+    for (const button of buttons) {
+      button.addEventListener("click", () => {
+        activeFilter = button.dataset.filter;
+        buttons.forEach((node) => node.classList.toggle("active", node === button));
+        applyFilters();
+      });
+    }
+    search.addEventListener("input", applyFilters);
+    buildCatalog();
+  </script>
+</body>
+</html>

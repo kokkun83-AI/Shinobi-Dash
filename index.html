@@ -65,6 +65,13 @@
       background: #020712;
     }
 
+    @media (orientation: landscape) {
+      #game-shell {
+        width: min(100vw, calc(100dvh * 16 / 9));
+        height: min(100dvh, calc(100vw * 9 / 16));
+      }
+    }
+
     #game {
       position: absolute;
       inset: 0;
@@ -1539,9 +1546,13 @@
         return randomInt(min, max);
       }
 
+      function maxGeneratedGap() {
+        return clamp(view.w * 0.3, 120, 280);
+      }
+
       function randomGap() {
         const min = clamp(view.w * 0.09, 52, 112);
-        const max = clamp(view.w * 0.3, 120, 280);
+        const max = maxGeneratedGap();
         return randomInt(min, max);
       }
 
@@ -1712,7 +1723,7 @@
       }
 
       function hardBridgeCeilingLength() {
-        return Math.max(1, view.groundY - HARD_BRIDGE_CEILING_MARGIN);
+        return Math.max(1, view.groundY - HARD_BRIDGE_CEILING_MARGIN, maxGeneratedGap() + 58);
       }
 
       function bridgeReachedCeiling() {
@@ -4087,6 +4098,10 @@
           resetGame();
         }
       });
+      if (window.visualViewport) {
+        window.visualViewport.addEventListener("resize", resize);
+        window.visualViewport.addEventListener("scroll", resize);
+      }
 
       let lastTime = performance.now();
       function frame(now) {

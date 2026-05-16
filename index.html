@@ -810,6 +810,21 @@
       height: 8.65%;
     }
 
+    #title-version {
+      position: absolute;
+      left: calc(12px + env(safe-area-inset-left));
+      top: calc(12px + env(safe-area-inset-top));
+      z-index: 14;
+      padding: 5px 8px;
+      color: rgba(255, 241, 182, 0.92);
+      background: rgba(5, 5, 6, 0.68);
+      border: 1px solid rgba(255, 216, 106, 0.36);
+      font-size: clamp(11px, 1.6vw, 15px);
+      line-height: 1;
+      text-shadow: 2px 2px 0 #050506;
+      pointer-events: none;
+    }
+
     .title-hotspot span {
       position: absolute;
       width: 1px;
@@ -1184,6 +1199,7 @@
           <button id="collection-open" class="title-hotspot" type="button" aria-label="Open collection"><span>COLLECTION</span></button>
         </div>
       </div>
+      <div id="title-version" aria-label="Version">ver.1.2</div>
     </section>
 
     <section id="collection-screen" aria-label="Collection" aria-hidden="true">

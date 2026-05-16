@@ -70,6 +70,12 @@
         width: min(100vw, calc(100dvh * 16 / 9));
         height: min(100dvh, calc(100vw * 9 / 16));
       }
+
+      #game-shell.gameplay-fit {
+        width: 100vw;
+        height: 100vh;
+        height: 100dvh;
+      }
     }
 
     #game {
@@ -1269,6 +1275,9 @@
       const WALK_SPEED = 430;
       const SHIFT_SPEED = 8.2;
       const MAX_DPR = 2;
+      const MOBILE_MAX_DPR = 1.25;
+      const FRAME_DT_CAP = 1 / 30;
+      const FRAME_STALL_RESET = 0.16;
       const STORAGE_KEY = "stick-hero-gold-best";
       const BEST_STORAGE_KEYS = {
         normal: "shinobi-dash-best-normal",
@@ -1425,6 +1434,25 @@
         return Math.round(randomRange(min, max));
       }
 
+      function isMobileRuntime() {
+        return Boolean(
+          navigator.maxTouchPoints > 0
+          || (window.matchMedia && window.matchMedia("(pointer: coarse)").matches)
+        );
+      }
+
+      function isGameplayFitActive() {
+        return !game.titleActive && !collectionScreenEl.classList.contains("active");
+      }
+
+      function useMobilePerformanceMode() {
+        return isMobileRuntime() && isGameplayFitActive();
+      }
+
+      function syncGameShellLayout() {
+        gameShell.classList.toggle("gameplay-fit", isGameplayFitActive());
+      }
+
       function paintPixelSprite(target, rows, palette, x, y, scale, flip) {
         for (let row = 0; row < rows.length; row += 1) {
           const line = rows[row];
@@ -1475,14 +1503,28 @@
         const rect = canvas.getBoundingClientRect();
         const width = rect.width || window.innerWidth || 900;
         const height = rect.height || window.innerHeight || 560;
+        const dprLimit = useMobilePerformanceMode() ? MOBILE_MAX_DPR : MAX_DPR;
+        const nextDpr = Math.min(window.devicePixelRatio || 1, dprLimit);
+        const nextCanvasWidth = Math.max(1, Math.floor(width * nextDpr));
+        const nextCanvasHeight = Math.max(1, Math.floor(height * nextDpr));
+        const layoutChanged = Math.abs(view.w - width) > 0.5
+          || Math.abs(view.h - height) > 0.5
+          || Math.abs(view.dpr - nextDpr) > 0.01;
+
+        if (!layoutChanged
+          && canvas.width === nextCanvasWidth
+          && canvas.height === nextCanvasHeight) {
+          return;
+        }
+
         view.w = Math.max(1, width);
         view.h = Math.max(1, height);
-        view.dpr = Math.min(window.devicePixelRatio || 1, MAX_DPR);
+        view.dpr = nextDpr;
         view.groundY = Math.round(view.h * 0.72);
         view.startX = Math.round(clamp(view.w * 0.12, 58, 116));
 
-        canvas.width = Math.floor(view.w * view.dpr);
-        canvas.height = Math.floor(view.h * view.dpr);
+        canvas.width = nextCanvasWidth;
+        canvas.height = nextCanvasHeight;
         ctx.setTransform(view.dpr, 0, 0, view.dpr, 0, 0);
         ctx.imageSmoothingEnabled = false;
 
@@ -1689,6 +1731,8 @@
         game.titleActive = false;
         titleScreenEl.classList.add("hidden");
         titleScreenEl.setAttribute("aria-hidden", "true");
+        syncGameShellLayout();
+        resize();
         resetGame();
         setupSfx();
         playSfx(sfxStartEl);
@@ -1702,6 +1746,8 @@
         overlayEl.setAttribute("aria-hidden", "true");
         titleScreenEl.classList.remove("hidden");
         titleScreenEl.setAttribute("aria-hidden", "false");
+        syncGameShellLayout();
+        resize();
         resetGame();
         startTitleBgm();
       }
@@ -2040,11 +2086,15 @@
         startTitleBgm();
         collectionScreenEl.classList.add("active");
         collectionScreenEl.setAttribute("aria-hidden", "false");
+        syncGameShellLayout();
+        resize();
       }
 
       function hideCollection() {
         collectionScreenEl.classList.remove("active");
         collectionScreenEl.setAttribute("aria-hidden", "true");
+        syncGameShellLayout();
+        resize();
         if (game.titleActive) {
           startTitleBgm();
         }
@@ -2653,6 +2703,11 @@
       }
 
       function drawBackground() {
+        if (useMobilePerformanceMode()) {
+          drawMobileBackground();
+          return;
+        }
+
         const gradient = ctx.createLinearGradient(0, 0, 0, view.h);
         gradient.addColorStop(0, "#01040c");
         gradient.addColorStop(0.42, "#061527");
@@ -2688,6 +2743,107 @@
         drawNinjaVillage();
         drawAnimalTraffic();
         drawGoldPetals();
+      }
+
+      function drawMobileBackground() {
+        const gradient = ctx.createLinearGradient(0, 0, 0, view.h);
+        gradient.addColorStop(0, "#01040c");
+        gradient.addColorStop(0.48, "#061527");
+        gradient.addColorStop(1, "#03060d");
+        ctx.fillStyle = gradient;
+        ctx.fillRect(0, 0, view.w, view.h);
+
+        const moonRadius = Math.round(clamp(view.h * 0.16, 42, 68));
+        drawFastPixelMoon(Math.round(view.w * 0.66), Math.round(view.h * 0.18), moonRadius);
+
+        drawPixelCloud(Math.round(view.w * 0.14), Math.round(view.h * 0.1), 0.72);
+        drawPixelCloud(Math.round(view.w * 0.78), Math.round(view.h * 0.13), 0.62);
+
+        for (let i = 0; i < 44; i += 1) {
+          const x = Math.round((i * 131 + 47) % (view.w + 80)) - 40;
+          const y = Math.round((i * 59 + 23) % Math.max(110, view.groundY - 74));
+          const size = i % 12 === 0 ? 3 : 2;
+          ctx.fillStyle = i % 5 === 0 ? "rgba(190, 156, 84, 0.34)" : "rgba(155, 145, 116, 0.18)";
+          ctx.fillRect(x, y, size, size);
+        }
+
+        drawMobileBackdrop();
+        drawAnimalTraffic();
+        drawGoldPetals();
+      }
+
+      function drawFastPixelMoon(cx, cy, radius) {
+        const cell = 6;
+        const left = Math.floor((cx - radius) / cell) * cell;
+        const top = Math.floor((cy - radius) / cell) * cell;
+        const right = Math.ceil((cx + radius) / cell) * cell;
+        const bottom = Math.ceil((cy + radius) / cell) * cell;
+        for (let y = top; y <= bottom; y += cell) {
+          for (let x = left; x <= right; x += cell) {
+            const dx = x + cell * 0.5 - cx;
+            const dy = y + cell * 0.5 - cy;
+            if (dx * dx + dy * dy > radius * radius) {
+              continue;
+            }
+            const edge = Math.sqrt(dx * dx + dy * dy) / radius;
+            ctx.fillStyle = edge > 0.86 ? "#d99a2c" : dx + dy < -radius * 0.18 ? "#ffe891" : "#ffd766";
+            ctx.fillRect(x, y, cell + 1, cell + 1);
+          }
+        }
+        ctx.fillStyle = "#d89d34";
+        ctx.fillRect(cx - Math.round(radius * 0.32), cy - Math.round(radius * 0.18), cell * 2, cell * 2);
+        ctx.fillRect(cx + Math.round(radius * 0.16), cy + Math.round(radius * 0.08), cell * 2, cell);
+      }
+
+      function drawMobileBackdrop() {
+        const base = view.groundY + 104;
+        ctx.fillStyle = "#0b1627";
+        ctx.beginPath();
+        ctx.moveTo(0, base);
+        for (let x = -80; x <= view.w + 120; x += 120) {
+          ctx.lineTo(x + 60, view.groundY + 42 + (x % 240 === 0 ? 14 : 0));
+          ctx.lineTo(x + 128, base);
+        }
+        ctx.lineTo(view.w, view.h);
+        ctx.lineTo(0, view.h);
+        ctx.fill();
+
+        ctx.fillStyle = "rgba(1, 4, 10, 0.5)";
+        ctx.fillRect(0, view.groundY + 78, view.w, Math.max(0, view.h - view.groundY - 78));
+
+        for (let x = -80 - (game.cameraX * 0.05) % 260; x < view.w + 180; x += 260) {
+          ctx.fillStyle = "#0b1727";
+          ctx.fillRect(x, view.groundY + 54, 116, 44);
+          drawRoof(x - 10, view.groundY + 38, 136, 18, "#03060c", "#17324c");
+          ctx.fillStyle = "#d79b35";
+          ctx.fillRect(x + 18, view.groundY + 70, 10, 7);
+          ctx.fillRect(x + 48, view.groundY + 70, 10, 7);
+          ctx.fillRect(x + 78, view.groundY + 70, 10, 7);
+        }
+
+        for (let x = view.w * 0.62 - (game.cameraX * 0.025) % 760; x < view.w + 520; x += 760) {
+          drawSimpleCastle(Math.round(x), Math.round(view.groundY + 44));
+        }
+      }
+
+      function drawSimpleCastle(x, baseY) {
+        ctx.fillStyle = "rgba(2, 5, 12, 0.42)";
+        ctx.fillRect(x - 58, baseY + 18, 132, 28);
+        ctx.fillStyle = "#05070d";
+        ctx.fillRect(x - 62, baseY - 8, 140, 8);
+        ctx.fillRect(x - 48, baseY - 42, 112, 8);
+        ctx.fillRect(x - 32, baseY - 72, 80, 8);
+        ctx.fillStyle = "#777363";
+        ctx.fillRect(x - 46, baseY - 4, 108, 32);
+        ctx.fillRect(x - 32, baseY - 38, 80, 30);
+        ctx.fillRect(x - 18, baseY - 68, 52, 26);
+        ctx.fillStyle = "#18243a";
+        ctx.fillRect(x - 28, baseY - 57, 72, 4);
+        ctx.fillRect(x - 38, baseY - 20, 92, 4);
+        ctx.fillStyle = "#8a6429";
+        ctx.fillRect(x - 24, baseY - 28, 7, 6);
+        ctx.fillRect(x + 4, baseY - 28, 7, 6);
+        ctx.fillRect(x + 32, baseY - 28, 7, 6);
       }
 
       function drawPixelDisc(cx, cy, radius, cell, color) {
@@ -3096,7 +3252,8 @@
       }
 
       function drawGoldPetals() {
-        for (let i = 0; i < 54; i += 1) {
+        const count = useMobilePerformanceMode() ? 18 : 54;
+        for (let i = 0; i < count; i += 1) {
           const x = Math.round((i * 91 + game.time * 22 - game.cameraX * 0.16) % (view.w + 120)) - 60;
           const y = Math.round((i * 67 + game.time * (14 + i % 5)) % (view.h + 80)) - 40;
           const w = i % 4 === 0 ? 7 : 4;
@@ -4092,20 +4249,39 @@
       document.addEventListener("webkitfullscreenchange", afterFullscreenChange);
       document.addEventListener("MSFullscreenChange", afterFullscreenChange);
 
+      let resizeRequest = 0;
+      function scheduleResize() {
+        if (resizeRequest) {
+          return;
+        }
+        resizeRequest = requestAnimationFrame(() => {
+          resizeRequest = 0;
+          resize();
+        });
+      }
+
       window.addEventListener("resize", () => {
-        resize();
+        scheduleResize();
         if (!game.platforms.length) {
           resetGame();
         }
       });
       if (window.visualViewport) {
-        window.visualViewport.addEventListener("resize", resize);
-        window.visualViewport.addEventListener("scroll", resize);
+        window.visualViewport.addEventListener("resize", scheduleResize);
       }
 
       let lastTime = performance.now();
+      function resetFrameClock() {
+        lastTime = performance.now();
+      }
+
+      document.addEventListener("visibilitychange", resetFrameClock);
+      window.addEventListener("pageshow", resetFrameClock);
+      window.addEventListener("focus", resetFrameClock);
+
       function frame(now) {
-        const dt = Math.min(0.033, (now - lastTime) / 1000);
+        const rawDt = (now - lastTime) / 1000;
+        const dt = rawDt > FRAME_STALL_RESET ? 0 : Math.min(FRAME_DT_CAP, rawDt);
         lastTime = now;
         update(dt);
         draw();

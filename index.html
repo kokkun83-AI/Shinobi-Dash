@@ -67,8 +67,9 @@
 
     @media (orientation: landscape) {
       #game-shell {
-        width: min(100vw, calc(100dvh * 16 / 9));
-        height: min(100dvh, calc(100vw * 9 / 16));
+        width: 100vw;
+        height: 100vh;
+        height: 100dvh;
       }
 
       #game-shell.gameplay-fit {
@@ -1275,7 +1276,7 @@
       const WALK_SPEED = 430;
       const SHIFT_SPEED = 8.2;
       const MAX_DPR = 2;
-      const MOBILE_MAX_DPR = 1.25;
+      const MOBILE_MAX_DPR = 1;
       const FRAME_DT_CAP = 1 / 30;
       const FRAME_STALL_RESET = 0.16;
       const STORAGE_KEY = "stick-hero-gold-best";
@@ -1309,6 +1310,13 @@
         dpr: 1,
         groundY: 0,
         startX: 0
+      };
+
+      const mobileBackgroundCache = {
+        canvas: null,
+        w: 0,
+        h: 0,
+        groundY: 0
       };
 
       const game = {
@@ -1527,6 +1535,7 @@
         canvas.height = nextCanvasHeight;
         ctx.setTransform(view.dpr, 0, 0, view.dpr, 0, 0);
         ctx.imageSmoothingEnabled = false;
+        mobileBackgroundCache.canvas = null;
 
         if (game.state !== "falling" && game.state !== "gameover") {
           game.hero.y = view.groundY - HERO.h;
@@ -2314,7 +2323,7 @@
       }
 
       function startExtendSfx() {
-        if (!audio.enabled) {
+        if (!audio.enabled || isMobileRuntime()) {
           return;
         }
         setupSfx();
@@ -2387,6 +2396,12 @@
       }
 
       function updateAnimals(dt) {
+        if (useMobilePerformanceMode()) {
+          game.animals = [];
+          game.nextAnimalIn = 12;
+          return;
+        }
+
         game.nextAnimalIn -= dt;
         if (game.nextAnimalIn <= 0) {
           spawnAnimal();
@@ -2746,33 +2761,51 @@
       }
 
       function drawMobileBackground() {
-        const gradient = ctx.createLinearGradient(0, 0, 0, view.h);
+        if (!mobileBackgroundCache.canvas
+          || mobileBackgroundCache.w !== view.w
+          || mobileBackgroundCache.h !== view.h
+          || mobileBackgroundCache.groundY !== view.groundY) {
+          renderMobileBackgroundCache();
+        }
+        ctx.drawImage(mobileBackgroundCache.canvas, 0, 0);
+      }
+
+      function renderMobileBackgroundCache() {
+        const bg = document.createElement("canvas");
+        bg.width = Math.max(1, Math.round(view.w));
+        bg.height = Math.max(1, Math.round(view.h));
+        const target = bg.getContext("2d");
+        target.imageSmoothingEnabled = false;
+
+        const gradient = target.createLinearGradient(0, 0, 0, view.h);
         gradient.addColorStop(0, "#01040c");
         gradient.addColorStop(0.48, "#061527");
         gradient.addColorStop(1, "#03060d");
-        ctx.fillStyle = gradient;
-        ctx.fillRect(0, 0, view.w, view.h);
+        target.fillStyle = gradient;
+        target.fillRect(0, 0, view.w, view.h);
 
         const moonRadius = Math.round(clamp(view.h * 0.16, 42, 68));
-        drawFastPixelMoon(Math.round(view.w * 0.66), Math.round(view.h * 0.18), moonRadius);
+        drawFastPixelMoon(target, Math.round(view.w * 0.66), Math.round(view.h * 0.18), moonRadius);
 
-        drawPixelCloud(Math.round(view.w * 0.14), Math.round(view.h * 0.1), 0.72);
-        drawPixelCloud(Math.round(view.w * 0.78), Math.round(view.h * 0.13), 0.62);
+        drawFastCloud(target, Math.round(view.w * 0.14), Math.round(view.h * 0.1), 0.72);
+        drawFastCloud(target, Math.round(view.w * 0.78), Math.round(view.h * 0.13), 0.62);
 
         for (let i = 0; i < 44; i += 1) {
           const x = Math.round((i * 131 + 47) % (view.w + 80)) - 40;
           const y = Math.round((i * 59 + 23) % Math.max(110, view.groundY - 74));
           const size = i % 12 === 0 ? 3 : 2;
-          ctx.fillStyle = i % 5 === 0 ? "rgba(190, 156, 84, 0.34)" : "rgba(155, 145, 116, 0.18)";
-          ctx.fillRect(x, y, size, size);
+          target.fillStyle = i % 5 === 0 ? "rgba(190, 156, 84, 0.34)" : "rgba(155, 145, 116, 0.18)";
+          target.fillRect(x, y, size, size);
         }
 
-        drawMobileBackdrop();
-        drawAnimalTraffic();
-        drawGoldPetals();
+        drawMobileBackdrop(target);
+        mobileBackgroundCache.canvas = bg;
+        mobileBackgroundCache.w = view.w;
+        mobileBackgroundCache.h = view.h;
+        mobileBackgroundCache.groundY = view.groundY;
       }
 
-      function drawFastPixelMoon(cx, cy, radius) {
+      function drawFastPixelMoon(target, cx, cy, radius) {
         const cell = 6;
         const left = Math.floor((cx - radius) / cell) * cell;
         const top = Math.floor((cy - radius) / cell) * cell;
@@ -2786,64 +2819,98 @@
               continue;
             }
             const edge = Math.sqrt(dx * dx + dy * dy) / radius;
-            ctx.fillStyle = edge > 0.86 ? "#d99a2c" : dx + dy < -radius * 0.18 ? "#ffe891" : "#ffd766";
-            ctx.fillRect(x, y, cell + 1, cell + 1);
+            target.fillStyle = edge > 0.86 ? "#d99a2c" : dx + dy < -radius * 0.18 ? "#ffe891" : "#ffd766";
+            target.fillRect(x, y, cell + 1, cell + 1);
           }
         }
-        ctx.fillStyle = "#d89d34";
-        ctx.fillRect(cx - Math.round(radius * 0.32), cy - Math.round(radius * 0.18), cell * 2, cell * 2);
-        ctx.fillRect(cx + Math.round(radius * 0.16), cy + Math.round(radius * 0.08), cell * 2, cell);
+        target.fillStyle = "#d89d34";
+        target.fillRect(cx - Math.round(radius * 0.32), cy - Math.round(radius * 0.18), cell * 2, cell * 2);
+        target.fillRect(cx + Math.round(radius * 0.16), cy + Math.round(radius * 0.08), cell * 2, cell);
       }
 
-      function drawMobileBackdrop() {
+      function drawFastCloud(target, x, y, scale) {
+        const blocks = [
+          [0, 18, 48, 18], [26, 8, 54, 24], [62, 0, 62, 32],
+          [112, 14, 72, 24], [16, 35, 148, 16]
+        ];
+        target.save();
+        target.translate(Math.round(x), Math.round(y));
+        target.scale(scale, scale);
+        target.fillStyle = "#6d4918";
+        for (const b of blocks) {
+          target.fillRect(b[0] - 5, b[1] + 7, b[2], b[3]);
+        }
+        target.fillStyle = "#9a6a24";
+        for (const b of blocks) {
+          target.fillRect(b[0], b[1], b[2], b[3]);
+        }
+        target.fillStyle = "#b68a39";
+        target.fillRect(34, 12, 34, 6);
+        target.fillRect(80, 5, 44, 8);
+        target.restore();
+      }
+
+      function drawMobileBackdrop(target) {
         const base = view.groundY + 104;
-        ctx.fillStyle = "#0b1627";
-        ctx.beginPath();
-        ctx.moveTo(0, base);
+        target.fillStyle = "#0b1627";
+        target.beginPath();
+        target.moveTo(0, base);
         for (let x = -80; x <= view.w + 120; x += 120) {
-          ctx.lineTo(x + 60, view.groundY + 42 + (x % 240 === 0 ? 14 : 0));
-          ctx.lineTo(x + 128, base);
+          target.lineTo(x + 60, view.groundY + 42 + (x % 240 === 0 ? 14 : 0));
+          target.lineTo(x + 128, base);
         }
-        ctx.lineTo(view.w, view.h);
-        ctx.lineTo(0, view.h);
-        ctx.fill();
+        target.lineTo(view.w, view.h);
+        target.lineTo(0, view.h);
+        target.fill();
 
-        ctx.fillStyle = "rgba(1, 4, 10, 0.5)";
-        ctx.fillRect(0, view.groundY + 78, view.w, Math.max(0, view.h - view.groundY - 78));
+        target.fillStyle = "rgba(1, 4, 10, 0.5)";
+        target.fillRect(0, view.groundY + 78, view.w, Math.max(0, view.h - view.groundY - 78));
 
-        for (let x = -80 - (game.cameraX * 0.05) % 260; x < view.w + 180; x += 260) {
-          ctx.fillStyle = "#0b1727";
-          ctx.fillRect(x, view.groundY + 54, 116, 44);
-          drawRoof(x - 10, view.groundY + 38, 136, 18, "#03060c", "#17324c");
-          ctx.fillStyle = "#d79b35";
-          ctx.fillRect(x + 18, view.groundY + 70, 10, 7);
-          ctx.fillRect(x + 48, view.groundY + 70, 10, 7);
-          ctx.fillRect(x + 78, view.groundY + 70, 10, 7);
+        for (let x = -80; x < view.w + 180; x += 260) {
+          target.fillStyle = "#0b1727";
+          target.fillRect(x, view.groundY + 54, 116, 44);
+          drawFastRoof(target, x - 10, view.groundY + 38, 136, 18, "#03060c", "#17324c");
+          target.fillStyle = "#d79b35";
+          target.fillRect(x + 18, view.groundY + 70, 10, 7);
+          target.fillRect(x + 48, view.groundY + 70, 10, 7);
+          target.fillRect(x + 78, view.groundY + 70, 10, 7);
         }
 
-        for (let x = view.w * 0.62 - (game.cameraX * 0.025) % 760; x < view.w + 520; x += 760) {
-          drawSimpleCastle(Math.round(x), Math.round(view.groundY + 44));
+        for (let x = view.w * 0.62; x < view.w + 520; x += 760) {
+          drawSimpleCastle(target, Math.round(x), Math.round(view.groundY + 44));
         }
       }
 
-      function drawSimpleCastle(x, baseY) {
-        ctx.fillStyle = "rgba(2, 5, 12, 0.42)";
-        ctx.fillRect(x - 58, baseY + 18, 132, 28);
-        ctx.fillStyle = "#05070d";
-        ctx.fillRect(x - 62, baseY - 8, 140, 8);
-        ctx.fillRect(x - 48, baseY - 42, 112, 8);
-        ctx.fillRect(x - 32, baseY - 72, 80, 8);
-        ctx.fillStyle = "#777363";
-        ctx.fillRect(x - 46, baseY - 4, 108, 32);
-        ctx.fillRect(x - 32, baseY - 38, 80, 30);
-        ctx.fillRect(x - 18, baseY - 68, 52, 26);
-        ctx.fillStyle = "#18243a";
-        ctx.fillRect(x - 28, baseY - 57, 72, 4);
-        ctx.fillRect(x - 38, baseY - 20, 92, 4);
-        ctx.fillStyle = "#8a6429";
-        ctx.fillRect(x - 24, baseY - 28, 7, 6);
-        ctx.fillRect(x + 4, baseY - 28, 7, 6);
-        ctx.fillRect(x + 32, baseY - 28, 7, 6);
+      function drawFastRoof(target, x, y, w, h, dark, light) {
+        target.fillStyle = dark;
+        target.beginPath();
+        target.moveTo(x, y + h);
+        target.lineTo(x + w * 0.5, y);
+        target.lineTo(x + w, y + h);
+        target.closePath();
+        target.fill();
+        target.fillStyle = light;
+        target.fillRect(x + 12, y + h - 5, Math.max(8, w - 24), 3);
+      }
+
+      function drawSimpleCastle(target, x, baseY) {
+        target.fillStyle = "rgba(2, 5, 12, 0.42)";
+        target.fillRect(x - 58, baseY + 18, 132, 28);
+        target.fillStyle = "#05070d";
+        target.fillRect(x - 62, baseY - 8, 140, 8);
+        target.fillRect(x - 48, baseY - 42, 112, 8);
+        target.fillRect(x - 32, baseY - 72, 80, 8);
+        target.fillStyle = "#777363";
+        target.fillRect(x - 46, baseY - 4, 108, 32);
+        target.fillRect(x - 32, baseY - 38, 80, 30);
+        target.fillRect(x - 18, baseY - 68, 52, 26);
+        target.fillStyle = "#18243a";
+        target.fillRect(x - 28, baseY - 57, 72, 4);
+        target.fillRect(x - 38, baseY - 20, 92, 4);
+        target.fillStyle = "#8a6429";
+        target.fillRect(x - 24, baseY - 28, 7, 6);
+        target.fillRect(x + 4, baseY - 28, 7, 6);
+        target.fillRect(x + 32, baseY - 28, 7, 6);
       }
 
       function drawPixelDisc(cx, cy, radius, cell, color) {
@@ -3400,7 +3467,7 @@
       }
 
       function strokeBridgePath(bridge, len, width, color, offsetY) {
-        const segments = Math.max(8, Math.ceil(len / 18));
+        const segments = useMobilePerformanceMode() ? 4 : Math.max(8, Math.ceil(len / 18));
         const amplitude = bridgeCurveAmplitude(bridge, len);
         ctx.beginPath();
         for (let i = 0; i <= segments; i += 1) {
@@ -3501,6 +3568,10 @@
         if (game.mode !== "hard" || game.hero.slashTime <= 0) {
           return;
         }
+        if (useMobilePerformanceMode()) {
+          drawSimpleSwordSlash();
+          return;
+        }
         const progress = 1 - game.hero.slashTime / SLASH_DURATION;
         const swing = 1 - Math.pow(1 - progress, 3);
         const centerX = Math.round(game.hero.x - game.cameraX + HERO.w * 0.58 + swing * 6);
@@ -3560,6 +3631,36 @@
         ctx.fillStyle = "#ffffff";
         ctx.fillRect(centerX - 8, centerY - 2, 12, 4);
         ctx.fillRect(centerX - 3, centerY - 8, 6, 12);
+        ctx.restore();
+      }
+
+      function drawSimpleSwordSlash() {
+        const progress = 1 - game.hero.slashTime / SLASH_DURATION;
+        const swing = 1 - Math.pow(1 - progress, 3);
+        const centerX = Math.round(game.hero.x - game.cameraX + HERO.w * 0.62 + swing * 8);
+        const centerY = Math.round(game.hero.y + HERO.h * 0.45);
+        const fade = progress < 0.78 ? 1 : Math.max(0, (1 - progress) / 0.22);
+        const angle = -1.9 + swing * 2.75;
+
+        ctx.save();
+        ctx.translate(centerX, centerY);
+        ctx.rotate(angle);
+        ctx.globalAlpha = fade;
+        ctx.fillStyle = "#ffffff";
+        ctx.fillRect(12, -4, 64, 8);
+        ctx.fillStyle = "#fff7d8";
+        ctx.fillRect(22, -10, 38, 4);
+        ctx.fillStyle = "rgba(223, 247, 255, 0.72)";
+        ctx.fillRect(36, 7, 46, 4);
+        ctx.restore();
+
+        ctx.save();
+        ctx.globalAlpha = fade * 0.7;
+        ctx.fillStyle = "#ffffff";
+        const tipX = Math.round(centerX + Math.cos(angle) * 74);
+        const tipY = Math.round(centerY + Math.sin(angle) * 74);
+        ctx.fillRect(tipX - 4, tipY - 4, 8, 8);
+        ctx.fillRect(tipX - 14, tipY - 2, 8, 4);
         ctx.restore();
       }
 
